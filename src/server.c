@@ -13,6 +13,7 @@ void start_server() {
     char buffer[1024];
     int bytes;
     char *response;
+    int opt = 1;
 
     printf("Starting server...\n");
 
@@ -21,6 +22,8 @@ void start_server() {
         perror("socket");
         exit(EXIT_FAILURE);
     }
+
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
     memset(&address, 0, sizeof(address));
 
@@ -56,7 +59,10 @@ void start_server() {
 
     printf("Received:\n%s\n", buffer);
 
-    response = "Hello\n";
+    response = "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/plain\r\n"
+                "\r\n"
+                "Hello from server\n";
 
     send(client_fd, response, strlen(response), 0);
 
