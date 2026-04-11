@@ -41,31 +41,34 @@ void start_server() {
         exit(EXIT_FAILURE);
     }
 
-    client_fd = accept(server_fd, NULL, NULL);
-    if (client_fd < 0) {
-        perror("accept");
-        exit(EXIT_FAILURE);
+    while (1) {
+        client_fd = accept(server_fd, NULL, NULL);
+        if (client_fd < 0) {
+            perror("accept");
+            exit(EXIT_FAILURE);
+        }
+
+        printf("Client connected\n");
+
+        bytes = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+        if (bytes < 0) {
+            perror("recv");
+            exit(EXIT_FAILURE);
+        }
+
+        buffer[bytes] = '\0';
+
+        printf("Received:\n%s\n", buffer);
+
+        response = "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: text/plain\r\n"
+                    "\r\n"
+                    "Hello from server\n";
+
+        send(client_fd, response, strlen(response), 0);
+
+        close(client_fd);
     }
 
-    printf("Client connected\n");
-
-    bytes = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
-    if (bytes < 0) {
-        perror("recv");
-        exit(EXIT_FAILURE);
-    }
-
-    buffer[bytes] = '\0';
-
-    printf("Received:\n%s\n", buffer);
-
-    response = "HTTP/1.1 200 OK\r\n"
-                "Content-Type: text/plain\r\n"
-                "\r\n"
-                "Hello from server\n";
-
-    send(client_fd, response, strlen(response), 0);
-
-    close(client_fd);
     close(server_fd);
 }
