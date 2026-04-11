@@ -11,7 +11,6 @@ void start_server() {
     int client_fd;
     struct sockaddr_in address;
     int bytes;
-    char *response;
     int opt = 1;
 
     printf("Starting server...\n");
@@ -52,6 +51,7 @@ void start_server() {
         char buffer[1024];
         char method[16] = {0};
         char path[256] = {0};
+        char file_path[512];
 
         bytes = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
         if (bytes < 0) {
@@ -69,19 +69,37 @@ void start_server() {
         printf("Path: %s\n", path);
 
         if (strcmp(path, "/") == 0) {
-            response = "HTTP/1.1 200 OK\r\n"
-                    "Content-Type: text/plain\r\n"
-                    "\r\n"
-                    "Home page: Hello from server\n";
+            strcpy(file_path, "static/index.html");
         } else {
-            response = "HTTP/1.1 404 Not Found\r\n"
-                    "\r\n"
-                    "Not found\n";
+            snprintf(file_path, sizeof(file_path), "static%s", path);
         }
 
-        
+        FILE *file = fopen(file_path, "r");
 
-        send(client_fd, response, strlen(response), 0);
+        if (!file) {
+            char *not_found = "HTTP/1.1 404 Not Found\r\n"
+                              "Content-Type text/plain\r\n"
+                              "\r\n"
+                              "File not found\n";
+            
+            send(client_fd, not_found, strlen(not_found), 0);
+            close(client_fd);
+            continue;                              
+        }
+
+        char file_buffer[4096];
+        size_t file_size = fread(file_buffer, 1, sizeof(file_buffer), file);
+        fclose(file);
+
+        char header[256];
+
+        snprintf(header, sizeof(header),
+                 "HTTP/1.1 200 OK\r\n"
+                 "Content-Type: text/html\r\n"
+                 "\r\n");
+
+        send(client_fd, header, strlen(header), 0);
+        send(client_fd, file_buffer, file_size, 0);
 
         close(client_fd);
     }
