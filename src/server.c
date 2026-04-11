@@ -6,6 +6,25 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
+const char *get_extension(const char *path) {
+    const char *dot = strrchr(path, '.');
+    return dot ? dot + 1 : "";
+}
+
+const char *get_mime_type(const char *path) {
+    const char *ext = get_extension(path);
+
+    if (strcmp(ext, "html") == 0) return "text/html";
+    if (strcmp(ext, "txt") == 0) return "text/plain";
+    if (strcmp(ext, "png") == 0) return "image/png";
+    if (strcmp(ext, "jpg") == 0) return "image/jpg";
+    if (strcmp(ext, "jpeg") == 0) return "image/jpeg";
+    if (strcmp(ext, "css") == 0) return "text/css";
+    if (strcmp(ext, "js") == 0) return "application/javascript";
+
+    return "application/octet-stream"; // default
+}
+
 void start_server() {
     int server_fd;
     int client_fd;
@@ -91,12 +110,15 @@ void start_server() {
         size_t file_size = fread(file_buffer, 1, sizeof(file_buffer), file);
         fclose(file);
 
+        const char *mime = get_mime_type(file_path);
+
         char header[256];
 
         snprintf(header, sizeof(header),
                  "HTTP/1.1 200 OK\r\n"
-                 "Content-Type: text/html\r\n"
-                 "\r\n");
+                 "Content-Type: %s\r\n"
+                 "\r\n",
+                 mime);
 
         send(client_fd, header, strlen(header), 0);
         send(client_fd, file_buffer, file_size, 0);
