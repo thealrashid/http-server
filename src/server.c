@@ -10,7 +10,6 @@ void start_server() {
     int server_fd;
     int client_fd;
     struct sockaddr_in address;
-    char buffer[1024];
     int bytes;
     char *response;
     int opt = 1;
@@ -50,6 +49,10 @@ void start_server() {
 
         printf("Client connected\n");
 
+        char buffer[1024];
+        char method[16] = {0};
+        char path[256] = {0};
+
         bytes = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
         if (bytes < 0) {
             perror("recv");
@@ -60,10 +63,23 @@ void start_server() {
 
         printf("Received:\n%s\n", buffer);
 
-        response = "HTTP/1.1 200 OK\r\n"
+        sscanf(buffer, "%s %s", method, path);
+
+        printf("Method: %s\n", method);
+        printf("Path: %s\n", path);
+
+        if (strcmp(path, "/") == 0) {
+            response = "HTTP/1.1 200 OK\r\n"
                     "Content-Type: text/plain\r\n"
                     "\r\n"
-                    "Hello from server\n";
+                    "Home page: Hello from server\n";
+        } else {
+            response = "HTTP/1.1 404 Not Found\r\n"
+                    "\r\n"
+                    "Not found\n";
+        }
+
+        
 
         send(client_fd, response, strlen(response), 0);
 
