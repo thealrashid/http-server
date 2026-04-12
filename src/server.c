@@ -1,3 +1,5 @@
+/* Networking and socket lifecycle management */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,33 +8,13 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-const char *get_extension(const char *path) {
-    const char *dot = strrchr(path, '.');
-    return dot ? dot + 1 : "";
-}
+#include "server.h"
+#include "handler.h"
 
-const char *get_mime_type(const char *path) {
-    const char *ext = get_extension(path);
-
-    if (strcmp(ext, "html") == 0) return "text/html";
-    if (strcmp(ext, "txt") == 0) return "text/plain";
-    if (strcmp(ext, "png") == 0) return "image/png";
-    if (strcmp(ext, "jpg") == 0) return "image/jpg";
-    if (strcmp(ext, "jpeg") == 0) return "image/jpeg";
-    if (strcmp(ext, "css") == 0) return "text/css";
-    if (strcmp(ext, "js") == 0) return "application/javascript";
-
-    return "application/octet-stream"; // default
-}
-
-void start_server() {
+int create_server_socket() {
     int server_fd;
-    int client_fd;
     struct sockaddr_in address;
-    int bytes;
     int opt = 1;
-
-    printf("Starting server...\n");
 
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
@@ -58,162 +40,24 @@ void start_server() {
         exit(EXIT_FAILURE);
     }
 
+    return server_fd;
+}
+
+void start_server() {    
+    int server_fd = create_server_socket();
+
+    printf("Starting server...\n");
+
     while (1) {
-        client_fd = accept(server_fd, NULL, NULL);
+        int client_fd = accept(server_fd, NULL, NULL);
         if (client_fd < 0) {
             perror("accept");
-            exit(EXIT_FAILURE);
+            continue;
         }
 
         printf("Client connected\n");
 
-        char buffer[4096];
-        char method[16] = {0};
-        char path[256] = {0};
-        char file_path[512];
-        int total = 0;
-        size_t content_length = 0;
-
-        while (1) {
-            bytes = recv(client_fd, buffer + total, sizeof(buffer) - total - 1, 0);
-
-            if (bytes <= 0) break;
-
-            total += bytes;
-            buffer[total] = '\0';
-
-            if (strstr(buffer, "\r\n\r\n")) {
-                break; // full headers received
-            }
-        }
-        
-        if (bytes < 0) {
-            perror("recv");
-            exit(EXIT_FAILURE);
-        }
-
-        buffer[bytes] = '\0';
-
-        //printf("Received:\n%s\n", buffer);
-
-        sscanf(buffer, "%s %s", method, path);
-        printf("Method: %s\n", method);
-        printf("Path: %s\n", path);
-
-        if (strcmp(method, "POST") == 0) {
-            printf("POST request detected\n");
-        }
-
-        char *body_start = strstr(buffer, "\r\n\r\n");
-        if (!body_start) {
-            printf("Invalid HTTP request\n");
-            close(client_fd);
-            continue;
-        }
-        body_start += 4; // skip "\r\n\r\n"
-
-        int header_len = body_start - buffer;
-        int body_bytes_in_buffer = total - header_len;
-        char body[1024] = {0};
-
-        if (body_bytes_in_buffer > 0) {
-            memcpy(body, body_start, body_bytes_in_buffer);
-        }
-
-        char *line_start = buffer;
-
-        while (line_start) {
-            char *line_end = strstr(line_start, "\r\n");
-            if (!line_end) break;
-
-            int len = line_end - line_start;
-
-            char line[512];
-            strncpy(line, line_start, len);
-            line[len] = '\0';
-
-            printf("Header: %s\n", line);
-
-            if (strncmp(line, "Content-Length:", 15) == 0) {
-                content_length = atoi(line + 15);
-            }
-
-            line_start = line_end + 2;
-        }
-
-        if (content_length > sizeof(body)) {
-            printf("Content length is too large\n");
-
-            char *response = "HTTP/1.1 413 Payload Too Large\r\n"
-                             "Content-Type: text/plain\r\n"
-                             "\r\n"
-                             "Payload too large\n";
-            
-            send(client_fd, response, strlen(response), 0);
-            close(client_fd);
-            continue;
-        }
-
-        int remaining = content_length - body_bytes_in_buffer;
-        int offset = body_bytes_in_buffer;
-
-        while (remaining > 0) {
-            int bytes = recv(client_fd, body + offset, remaining, 0);
-            if (bytes <= 0) break;
-
-            offset += bytes;
-            remaining -= bytes;
-        }
-
-        printf("POST body: %s\n", body);
-
-        if (strcmp(path, "/") == 0) {
-            strcpy(file_path, "static/index.html");
-        } else {
-            snprintf(file_path, sizeof(file_path), "static%s", path);
-        }
-
-        FILE *file = fopen(file_path, "r");
-
-        fseek(file, 0, SEEK_END);
-        long file_size = ftell(file);
-        rewind(file);
-
-        if (!file) {
-            char *not_found = "HTTP/1.1 404 Not Found\r\n"
-                              "Content-Type text/plain\r\n"
-                              "\r\n"
-                              "File not found\n";
-            
-            send(client_fd, not_found, strlen(not_found), 0);
-            close(client_fd);
-            continue;                              
-        }
-
-        const char *mime = get_mime_type(file_path);
-
-        char header[256];
-
-        snprintf(header, sizeof(header),
-                 "HTTP/1.1 200 OK\r\n"
-                 "Content-Type: %s\r\n"
-                 "Content-Length: %zu\r\n"
-                 "Connection: close\r\n"
-                 "\r\n",
-                 mime, file_size);
-
-        send(client_fd, header, strlen(header), 0);
-        
-        char file_buffer[4096];
-        size_t bytes_read;
-
-        while ((bytes_read = fread(file_buffer, 1, sizeof(file_buffer), file)) > 0) {
-            send(client_fd, file_buffer, bytes_read, 0);
-        }
-
-        fclose(file);     
-
-        close(client_fd);
+        handle_client(client_fd);
     }
 
     close(server_fd);
