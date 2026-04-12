@@ -72,7 +72,7 @@ void start_server() {
         char path[256] = {0};
         char file_path[512];
         int total = 0;
-        int content_length = 0;
+        size_t content_length = 0;
 
         while (1) {
             bytes = recv(client_fd, buffer + total, sizeof(buffer) - total - 1, 0);
@@ -97,21 +97,75 @@ void start_server() {
         //printf("Received:\n%s\n", buffer);
 
         sscanf(buffer, "%s %s", method, path);
+        printf("Method: %s\n", method);
+        printf("Path: %s\n", path);
 
-        char *line = strtok(buffer, "\r\n");
+        if (strcmp(method, "POST") == 0) {
+            printf("POST request detected\n");
+        }
 
-        while (line != NULL) {
+        char *body_start = strstr(buffer, "\r\n\r\n");
+        if (!body_start) {
+            printf("Invalid HTTP request\n");
+            close(client_fd);
+            continue;
+        }
+        body_start += 4; // skip "\r\n\r\n"
+
+        int header_len = body_start - buffer;
+        int body_bytes_in_buffer = total - header_len;
+        char body[1024] = {0};
+
+        if (body_bytes_in_buffer > 0) {
+            memcpy(body, body_start, body_bytes_in_buffer);
+        }
+
+        char *line_start = buffer;
+
+        while (line_start) {
+            char *line_end = strstr(line_start, "\r\n");
+            if (!line_end) break;
+
+            int len = line_end - line_start;
+
+            char line[512];
+            strncpy(line, line_start, len);
+            line[len] = '\0';
+
             printf("Header: %s\n", line);
 
             if (strncmp(line, "Content-Length:", 15) == 0) {
                 content_length = atoi(line + 15);
             }
 
-            line = strtok(NULL, "\r\n");
+            line_start = line_end + 2;
         }
 
-        printf("Method: %s\n", method);
-        printf("Path: %s\n", path);
+        if (content_length > sizeof(body)) {
+            printf("Content length is too large\n");
+
+            char *response = "HTTP/1.1 413 Payload Too Large\r\n"
+                             "Content-Type: text/plain\r\n"
+                             "\r\n"
+                             "Payload too large\n";
+            
+            send(client_fd, response, strlen(response), 0);
+            close(client_fd);
+            continue;
+        }
+
+        int remaining = content_length - body_bytes_in_buffer;
+        int offset = body_bytes_in_buffer;
+
+        while (remaining > 0) {
+            int bytes = recv(client_fd, body + offset, remaining, 0);
+            if (bytes <= 0) break;
+
+            offset += bytes;
+            remaining -= bytes;
+        }
+
+        printf("POST body: %s\n", body);
 
         if (strcmp(path, "/") == 0) {
             strcpy(file_path, "static/index.html");
