@@ -67,12 +67,26 @@ void start_server() {
 
         printf("Client connected\n");
 
-        char buffer[1024];
+        char buffer[4096];
         char method[16] = {0};
         char path[256] = {0};
         char file_path[512];
+        int total = 0;
+        int content_length = 0;
 
-        bytes = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+        while (1) {
+            bytes = recv(client_fd, buffer + total, sizeof(buffer) - total - 1, 0);
+
+            if (bytes <= 0) break;
+
+            total += bytes;
+            buffer[total] = '\0';
+
+            if (strstr(buffer, "\r\n\r\n")) {
+                break; // full headers received
+            }
+        }
+        
         if (bytes < 0) {
             perror("recv");
             exit(EXIT_FAILURE);
@@ -80,9 +94,21 @@ void start_server() {
 
         buffer[bytes] = '\0';
 
-        printf("Received:\n%s\n", buffer);
+        //printf("Received:\n%s\n", buffer);
 
         sscanf(buffer, "%s %s", method, path);
+
+        char *line = strtok(buffer, "\r\n");
+
+        while (line != NULL) {
+            printf("Header: %s\n", line);
+
+            if (strncmp(line, "Content-Length:", 15) == 0) {
+                content_length = atoi(line + 15);
+            }
+
+            line = strtok(NULL, "\r\n");
+        }
 
         printf("Method: %s\n", method);
         printf("Path: %s\n", path);
