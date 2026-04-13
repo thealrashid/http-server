@@ -5,5 +5,6 @@
 
 void handle_client(int client_fd);
 void route_request(int client_fd, http_request *req);
+void handle_post_echo(int client_fd, http_request *req);
 
 #endif
