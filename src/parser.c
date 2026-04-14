@@ -149,3 +149,31 @@ int parse_request(int client_fd, http_request *req) {
 
     return 0;
 }
+
+int parse_form_data(const char *body, form_field *fields, int max_fields) {
+    int count = 0;
+
+    char *data = strdup(body);
+    char *pair = strtok(data, "&");
+
+    while (pair && count < max_fields) {
+        char *eq = strchr(pair, '=');
+
+        if (eq) {
+            *eq = '\0';
+
+            strncpy(fields[count].key, pair, sizeof(fields[count].key) - 1);
+            strncpy(fields[count].value, eq + 1, sizeof(fields[count].value) - 1);
+
+            fields[count].key[sizeof(fields[count].key) - 1] = '\0';
+            fields[count].value[sizeof(fields[count].value) - 1] = '\0';
+
+            count++;
+        }
+
+        pair = strtok(NULL, "&");
+    }
+
+    free(data);
+    return count;
+}

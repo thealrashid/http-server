@@ -52,6 +52,20 @@ void handle_post_echo(int client_fd, http_request *req) {
         return;
     }
 
+    form_field fields[10];
+
+    int n = parse_form_data(req->body, fields, 10);
+
+    printf("Parsed form data\n");
+
+    for (int i = 0; i < n; i++) {
+        printf("Key: %s, value: %s\n", fields[i].key, fields[i].value);
+    }
+
+    send_simple_response(client_fd, req->body, req->content_length); // echo raw body
+}
+
+void send_simple_response(int client_fd, const char *body, size_t content_length) {
     char header[256];
 
     snprintf(header, sizeof(header),
@@ -60,8 +74,8 @@ void handle_post_echo(int client_fd, http_request *req) {
         "Content-Length: %zu\r\n"
         "Connection: close\r\n"
         "\r\n",
-        req->content_length);
+        content_length);
 
     send(client_fd, header, strlen(header), 0);
-    send(client_fd, req->body, req->content_length, 0);
+    send(client_fd, body, content_length, 0);
 }
