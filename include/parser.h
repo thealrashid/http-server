@@ -23,5 +23,6 @@ void parse_request_line(char *buffer, http_request *req);
 void parse_headers(char *buffer, http_request *req);
 int read_body(char *buffer, http_request *req, char *body_start, int client_fd, int total);
 int parse_form_data(const char *body, form_field *fields, int max_fields);
+void url_decode(char *src, char *dest);
 
 #endif

@@ -7,6 +7,7 @@
 
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <ctype.h>
 
 #include "parser.h"
 
@@ -162,8 +163,14 @@ int parse_form_data(const char *body, form_field *fields, int max_fields) {
         if (eq) {
             *eq = '\0';
 
-            strncpy(fields[count].key, pair, sizeof(fields[count].key) - 1);
-            strncpy(fields[count].value, eq + 1, sizeof(fields[count].value) - 1);
+            char decoded_key[64];
+            char decoded_value[256];
+
+            url_decode(pair, decoded_key);
+            url_decode(eq + 1, decoded_value);
+
+            strncpy(fields[count].key, decoded_key, sizeof(fields[count].key) - 1);
+            strncpy(fields[count].value, decoded_value, sizeof(fields[count].value) - 1);
 
             fields[count].key[sizeof(fields[count].key) - 1] = '\0';
             fields[count].value[sizeof(fields[count].value) - 1] = '\0';
@@ -176,4 +183,27 @@ int parse_form_data(const char *body, form_field *fields, int max_fields) {
 
     free(data);
     return count;
+}
+
+void url_decode(char *src, char *dest) {
+    char *p = src;
+    char code[3] = {0};
+
+    while (*p) {
+        if (*p == '%') {
+            if (isxdigit(*(p + 1)) && isxdigit(*(p + 2))) {
+                code[0] = *(p + 1);
+                code[1] = *(p + 2);
+                *dest++ = (char)strtol(code, NULL, 16);
+                p += 3;
+            }
+        } else if (*p == '+') {
+            *dest++ = ' ';
+            p++;
+        } else {
+            *dest++ = *p++;
+        }
+    }
+
+    *dest = '\0';
 }
