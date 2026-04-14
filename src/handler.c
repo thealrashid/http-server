@@ -5,10 +5,24 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+
 #include "handler.h"
 #include "parser.h"
 #include "file.h"
 #include "response.h"
+
+typedef struct {
+    char method[8];
+    char path[64];
+    void (*handler)(int, http_request *);
+} route;
+
+route routes[] = {
+    {"POST", "/echo", handle_post_echo},
+    {"POST", "/submit", handle_submit},
+};
 
 void route_request(int client_fd, http_request *req) {
     if (strcmp(req->method, "GET") == 0) {
@@ -16,15 +30,18 @@ void route_request(int client_fd, http_request *req) {
         return;
     }
 
-    if (strcmp(req->method, "POST") == 0) {
-        if (strcmp(req->path, "/echo") == 0) {
-            handle_post_echo(client_fd, req);
-            return;
-        }
+    int num_routes = sizeof(routes) / sizeof(routes[0]);
 
-        send_404(client_fd);
-        return;
+    for (int i = 0; i < num_routes; i++) {
+        if (strcmp(req->method, routes[i].method) == 0 && 
+            strcmp(req->path, routes[i].path) == 0) {
+
+                routes[i].handler(client_fd, req);
+                return;
+            }
     }
+
+    send_404(client_fd);
 
     send_404(client_fd);
 }
@@ -63,6 +80,12 @@ void handle_post_echo(int client_fd, http_request *req) {
     }
 
     send_simple_response(client_fd, req->body, req->content_length); // echo raw body
+}
+
+void handle_submit(int client_fd, http_request *req) {
+    form_field fields[10];
+
+    int n = parse_form_data(req->body, fields, 10);
 }
 
 void send_simple_response(int client_fd, const char *body, size_t content_length) {
