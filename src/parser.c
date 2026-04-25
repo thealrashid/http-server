@@ -48,12 +48,15 @@ void parse_headers(char *buffer, http_request *req) {
     if (!line_start) return;
 
     line_start += 2;
+    req->header_count = 0;
 
-    while (line_start) {
+    while (line_start && req->header_count < MAX_HEADERS) {
         char *line_end = strstr(line_start, "\r\n");
         if (!line_end) break;
 
         int len = line_end - line_start;
+
+        if (len == 0) break; // end of headers
 
         char line[512];
         strncpy(line, line_start, len);
@@ -63,12 +66,46 @@ void parse_headers(char *buffer, http_request *req) {
 
         printf("Header: %s\n", line);
 
-        if (strncasecmp(line, "Content-Length:", 15) == 0) {
-            req->content_length = atoi(line + 15);
+        char *colon = strchr(line, ':');
+        if (colon) {
+            *colon = '\0';
+
+            char *key = line;
+            char *value = colon + 1;
+
+            while (*value == ' ') value++; // trim space
+
+            strncpy(req->headers[req->header_count].key, key, sizeof(req->headers[0].key) - 1);
+
+            strncpy(req->headers[req->header_count].value, value, sizeof(req->headers[0].value) - 1);
+
+            req->headers[req->header_count].key[sizeof(req->headers[0].key) - 1] = '\0';
+
+            req->headers[req->header_count].value[sizeof(req->headers[0].value)  -1] = '\0';
+
+            req->header_count++;
         }
 
         line_start = line_end + 2;
     }
+
+    const char *val = get_header(req, "Content-Length");
+
+    if (val) {
+        req->content_length = (size_t)strtol(val, NULL, 10);
+    } else {
+        req->content_length = 0;
+    }
+}
+
+const char *get_header(http_request *req, const char *key) {
+    for (int i = 0; i < req->header_count; i++) {
+        if (strcasecmp(req->headers[i].key, key) == 0) {
+            return req->headers[i].value;
+        }
+    }
+
+    return NULL;
 }
 
 /* Allocate memory for body and copy from buffer */

@@ -54,6 +54,12 @@ void handle_client(int client_fd) {
         return;
     }
 
+    printf("------Headers------\n");
+
+    for (int i = 0; i < req.header_count; i++) {
+        printf("%s: %s\n", req.headers[i].key, req.headers[i].value);
+    }
+
     route_request(client_fd, &req);
 
     if (req.body) {
@@ -86,6 +92,10 @@ void handle_submit(int client_fd, http_request *req) {
     form_field fields[10];
 
     int n = parse_form_data(req->body, fields, 10);
+
+    printf("Parsed %d fields\n", n);
+
+    send_simple_response(client_fd, req->body, req->content_length); // echo raw body
 }
 
 void send_simple_response(int client_fd, const char *body, size_t content_length) {
