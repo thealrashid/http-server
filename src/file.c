@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "file.h"
+#include "response.h"
 
 const char *get_extension(const char *path) {
     const char *dot = strrchr(path, '.');

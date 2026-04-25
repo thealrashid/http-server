@@ -42,8 +42,6 @@ void route_request(int client_fd, http_request *req) {
     }
 
     send_404(client_fd);
-
-    send_404(client_fd);
 }
 
 void handle_client(int client_fd) {
@@ -75,6 +73,12 @@ void handle_post_echo(int client_fd, http_request *req) {
         return;
     }
 
+    const char *type = get_header(req, "Content-Type");
+
+    if (type && strstr(type, "application/x-www-form-urlencoded")) {
+
+    }
+
     form_field fields[10];
 
     int n = parse_form_data(req->body, fields, 10);
@@ -89,13 +93,24 @@ void handle_post_echo(int client_fd, http_request *req) {
 }
 
 void handle_submit(int client_fd, http_request *req) {
-    form_field fields[10];
+    const char *type = get_header(req, "Content-Type");
 
-    int n = parse_form_data(req->body, fields, 10);
+    if (type && strstr(type, "application/x-www-form-urlencoded")) {
+        form_field fields[10];
 
-    printf("Parsed %d fields\n", n);
+        int n = parse_form_data(req->body, fields, 10);
 
-    send_simple_response(client_fd, req->body, req->content_length); // echo raw body
+        printf("Parsed %d fields\n", n);
+
+        for (int i = 0; i < n; i++) {
+            printf("%s = %s\n", fields[i].key, fields[i].value);
+        }
+
+        send_simple_response(client_fd, "Form parsed\n", strlen("Form parsed\n")); // echo raw body
+        return;
+    }
+    
+    send_simple_response(client_fd, "Unsupported Content-Type\n", strlen("Unsupported Content-Type\n"));
 }
 
 void send_simple_response(int client_fd, const char *body, size_t content_length) {
