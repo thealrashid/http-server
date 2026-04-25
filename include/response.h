@@ -18,4 +18,6 @@ void send_500(int client_fd);
 
 void send_400(int client_fd);
 
+void send_403(int client_fd);
+
 #endif

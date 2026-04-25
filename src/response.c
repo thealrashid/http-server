@@ -22,7 +22,7 @@ void send_file_response(int client_fd, FILE *file, long file_size, const char *m
         mime, file_size);
 
     send(client_fd, header, strlen(header), 0);
-    
+
     char file_buffer[4096];
     size_t bytes_read;
 
@@ -74,4 +74,9 @@ void send_500(int client_fd) {
 void send_400(int client_fd) {
     const char *msg = "Unsupported Content-Type\n";
     send_response(client_fd, 400, "Unsupported Content-Type\n", "text/plain", msg, strlen(msg));
+}
+
+void send_403(int client_fd) {
+    const char *msg = "Forbidden\n";
+    send_response(client_fd, 403, "Forbidden", "text/plain", msg, strlen(msg));
 }

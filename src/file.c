@@ -4,9 +4,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <limits.h>
 
 #include "file.h"
 #include "response.h"
+#include "parser.h"
 
 const char *get_extension(const char *path) {
     const char *dot = strrchr(path, '.');
@@ -28,15 +30,32 @@ const char *get_mime_type(const char *path) {
 }
 
 void serve_static_file(int client_fd, const char *path) {
-    char file_path[512];
+    char full_path[PATH_MAX];
+    char resolved_path[PATH_MAX];
+    char static_root[PATH_MAX];
 
     if (strcmp(path, "/") == 0) {
-        strcpy(file_path, "static/index.html");
+        snprintf(full_path, sizeof(full_path), "static/index.html");
     } else {
-        snprintf(file_path, sizeof(file_path), "static%s", path);
+        snprintf(full_path, sizeof(full_path), "static%s", path);
     }
 
-    FILE *file = fopen(file_path, "rb");
+    if (!realpath(full_path, resolved_path)) {
+        send_404(client_fd);
+        return;
+    }
+
+    if (!realpath("static", static_root)) {
+        perror("realpath");
+        send_500(client_fd);
+        return;
+    }
+
+    if (strncmp(resolved_path, static_root, strlen(static_root)) != 0) {
+        send_403(client_fd);
+    }
+
+    FILE *file = fopen(resolved_path, "rb");
 
     if (!file) {
         printf("File not found\n");
@@ -48,7 +67,7 @@ void serve_static_file(int client_fd, const char *path) {
     long file_size = ftell(file);
     rewind(file);
 
-    const char *mime = get_mime_type(file_path);
+    const char *mime = get_mime_type(resolved_path);
 
     send_file_response(client_fd, file, file_size, mime);
 
