@@ -89,11 +89,20 @@ void handle_post_echo(int client_fd, http_request *req) {
         printf("Key: %s, value: %s\n", fields[i].key, fields[i].value);
     }
 
-    send_simple_response(client_fd, req->body, req->content_length); // echo raw body
+    send_response(client_fd, 200, "OK", "text/plain", req->body, req->content_length); // echo raw body
 }
 
 void handle_submit(int client_fd, http_request *req) {
     const char *type = get_header(req, "Content-Type");
+
+    if (!req->body) {
+        send_response(client_fd,
+                      400, "Bad Request",
+                      "text/plain",
+                      "Missing body\n",
+                      strlen("Missing body\n"));
+        return;
+    }
 
     if (type && strstr(type, "application/x-www-form-urlencoded")) {
         form_field fields[10];
@@ -106,24 +115,13 @@ void handle_submit(int client_fd, http_request *req) {
             printf("%s = %s\n", fields[i].key, fields[i].value);
         }
 
-        send_simple_response(client_fd, "Form parsed\n", strlen("Form parsed\n")); // echo raw body
+        send_ok(client_fd, "Form parsed\n");
         return;
     }
     
-    send_simple_response(client_fd, "Unsupported Content-Type\n", strlen("Unsupported Content-Type\n"));
-}
-
-void send_simple_response(int client_fd, const char *body, size_t content_length) {
-    char header[256];
-
-    snprintf(header, sizeof(header),
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Type: text/plain\r\n"
-        "Content-Length: %zu\r\n"
-        "Connection: close\r\n"
-        "\r\n",
-        content_length);
-
-    send(client_fd, header, strlen(header), 0);
-    send(client_fd, body, content_length, 0);
+    send_response(client_fd,
+                  415, "Unsupported Media Type",
+                  "text/plain",
+                  "Unsupported Content-Type\n",
+                  strlen("Unsupported Content-Type\n"));
 }

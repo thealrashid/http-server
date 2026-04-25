@@ -10,6 +10,7 @@
 #include <ctype.h>
 
 #include "parser.h"
+#include "response.h"
 
 /* Read from socket */
 int read_headers(int client_fd, char *buffer, size_t buffer_size, int *total) {
@@ -170,14 +171,11 @@ int parse_request(int client_fd, http_request *req) {
     parse_headers(buffer, req);
 
     if (req->content_length > MAX_BODY_SIZE) {
-        printf("Content length is too large\n");
-
-        char *response = "HTTP/1.1 413 Payload Too Large\r\n"
-                            "Content-Type: text/plain\r\n"
-                            "\r\n"
-                            "Payload too large\n";
-        
-        send(client_fd, response, strlen(response), 0);
+        send_response(client_fd, 
+                413, "Payload Too Large", 
+                "text/plan", 
+                "Payload Too Large\n", 
+                strlen("Payload Too Large\n"));
         return -1;
     }
 
