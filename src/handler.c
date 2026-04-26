@@ -63,8 +63,6 @@ void handle_client(int client_fd) {
     if (req.body) {
         free(req.body);
     }
-    
-    close(client_fd);
 }
 
 void handle_post_echo(int client_fd, http_request *req) {

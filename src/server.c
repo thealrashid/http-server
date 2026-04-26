@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -55,10 +56,30 @@ void start_server() {
             continue;
         }
 
-        printf("Client connected\n");
+        int *fd = malloc(sizeof(int));
+        *fd = client_fd;
 
-        handle_client(client_fd);
+        pthread_t tid;
+
+        if (pthread_create(&tid, NULL, handle_client_thread, fd) != 0) {
+            perror("pthread_create");
+            close(client_fd);
+            free(fd);
+            continue;
+        }
+
+        pthread_detach(tid);
     }
 
     close(server_fd);
+}
+
+void *handle_client_thread(void *arg) {
+    int client_fd = *(int *)arg;
+    free(arg);
+
+    handle_client(client_fd);
+
+    close(client_fd);
+    return NULL;
 }
