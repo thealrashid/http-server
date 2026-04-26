@@ -7,6 +7,10 @@
 
 #define MAX_HEADERS 20
 
+#define EHEADER 1
+#define ELINE 2
+#define ECLEN 3
+
 typedef struct {
     char key[64];
     char value[256];
@@ -32,9 +36,9 @@ int parse_request(int client_fd, http_request *req);
 
 int read_headers(int client_fd, char *buffer, size_t buffer_size, int *total);
 
-void parse_request_line(char *buffer, http_request *req);
+int parse_request_line(char *buffer, http_request *req);
 
-void parse_headers(char *buffer, http_request *req);
+int parse_headers(char *buffer, http_request *req);
 
 int read_body(char *buffer, http_request *req, char *body_start, int client_fd, int total);
 

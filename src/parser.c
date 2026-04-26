@@ -15,9 +15,16 @@
 /* Read from socket */
 int read_headers(int client_fd, char *buffer, size_t buffer_size, int *total) {
     int bytes;
+    int max_loops = 100;
     
-    while (1) {
+    while (max_loops--) {
         if (*total >= (int)buffer_size - 1) {
+            send_response(client_fd,
+                  413, "Payload Too Large",
+                  "text/plain",
+                  "Headers too large\n",
+                  strlen("Headers too large\n"));
+
             return -1; // headers too large
         }
 
@@ -33,20 +40,33 @@ int read_headers(int client_fd, char *buffer, size_t buffer_size, int *total) {
         }
     }
 
+    if (max_loops < 0) {
+        send_response(client_fd,
+                  400, "Bad Request",
+                  "text/plain",
+                  "Headers not terminated\n",
+                  strlen("Headers not terminated\n"));
+        return -1;
+    }
+
     return 0;
 }
 
 /* Parse request line */
-void parse_request_line(char *buffer, http_request *req) {
-    sscanf(buffer, "%15s %255s", req->method, req->path);
+int parse_request_line(char *buffer, http_request *req) {
+    if (sscanf(buffer, "%15s %255s", req->method, req->path) != 2) {
+        return -1;
+    }
     printf("Method: %s\n", req->method);
     printf("Path: %s\n", req->path);
+
+    return 0;
 }
 
 /* Parse headers */
-void parse_headers(char *buffer, http_request *req) {
+int parse_headers(char *buffer, http_request *req) {
     char *line_start = strstr(buffer, "\r\n");
-    if (!line_start) return;
+    if (!line_start) return -ELINE;
 
     line_start += 2;
     req->header_count = 0;
@@ -90,13 +110,26 @@ void parse_headers(char *buffer, http_request *req) {
         line_start = line_end + 2;
     }
 
+    if (req->header_count >= MAX_HEADERS) {
+        return -EHEADER;
+    }
+
     const char *val = get_header(req, "Content-Length");
 
     if (val) {
-        req->content_length = (size_t)strtol(val, NULL, 10);
+        char *end;
+        long len = strtol(val, &end, 10);
+
+        if (*end != '\0' || len < 0 || len > MAX_BODY_SIZE) {
+            return -ECLEN;
+        }
+
+        req->content_length = (size_t)len;
     } else {
         req->content_length = 0;
     }
+
+    return 0;
 }
 
 const char *get_header(http_request *req, const char *key) {
@@ -139,10 +172,17 @@ int read_body(char *buffer, http_request *req, char *body_start, int client_fd, 
 
     while (remaining > 0) {
         int bytes = recv(client_fd, req->body + offset, remaining, 0);
-        if (bytes <= 0) return -1;
+        if (bytes <= 0) {
+            if (req->body) free(req->body);
+            return -1;
+        }
 
         offset += bytes;
         remaining -= bytes;
+    }
+
+    if (req->body) {
+        free(req->body);
     }
 
     return 0;
@@ -158,7 +198,15 @@ int parse_request(int client_fd, http_request *req) {
         printf("Error receiving bytes\n");
         return -1;
     }
-    parse_request_line(buffer, req);
+
+    if (parse_request_line(buffer, req) < 0) {
+        send_response(client_fd,
+                    400, "Bad Request",
+                    "text/plain",
+                    "Invalid request line\n",
+                    strlen("Invalid request line\n"));
+        return -1;
+    }
 
     /* Locate body start */
     char *body_start = strstr(buffer, "\r\n\r\n");
@@ -168,7 +216,29 @@ int parse_request(int client_fd, http_request *req) {
     }
     body_start += 4; // skip "\r\n\r\n"
 
-    parse_headers(buffer, req);
+    int retval = parse_headers(buffer, req);
+    if (retval == -EHEADER) {
+        send_response(client_fd,
+                  400, "Bad Request",
+                  "text/plain",
+                  "Too many headers\n",
+                  strlen("Too many headers\n"));
+        return -1;
+    } else if (retval == -ECLEN) {
+        send_response(client_fd,
+                      400, "Bad Request",
+                      "text/plain",
+                      "Invalid Content-Length\n",
+                      strlen("Invalid Content-Length\n"));
+        return -1;
+    } else if (retval == -ELINE) {
+        send_response(client_fd,
+                      400, "Bad Request",
+                      "text/plain",
+                      "Invalid Header\n",
+                      strlen("Invalid Header\n"));
+        return -1;
+    }
 
     if (req->content_length > MAX_BODY_SIZE) {
         send_response(client_fd, 
